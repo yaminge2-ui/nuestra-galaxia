@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galaxia Mágica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #05040d;
+    --bg2: #0c0a1f;
+    --ink: #f1ecff;
+    --ink-dim: #b9b2d6;
+    --accent: #ffd27a;
+    --accent2: #ff9ecb;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%;
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    overflow:hidden;
+    font-family: 'Quicksand', sans-serif;
+    -webkit-user-select:none; user-select:none;
+    touch-action:none;
+  }
+  html{scroll-padding-top: env(safe-area-inset-top, 0px);}
+
+  #galaxy{
+    position:fixed; inset:0; width:100%; height:100%;
+    display:block;
+    cursor: grab;
+  }
+  #galaxy.dragging{cursor:grabbing;}
+
+  #hint{
+    position:fixed;
+    top: calc(env(safe-area-inset-top,0px) + 18px);
+    left:0; right:0;
+    text-align:center;
+    pointer-events:none;
+    z-index:5;
+    transition: opacity 1.2s ease;
+  }
+  #hint h1{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:600;
+    font-size: clamp(22px, 4.5vw, 34px);
+    letter-spacing:0.02em;
+    margin:0 0 6px 0;
+    color:var(--ink);
+    text-shadow: 0 0 18px rgba(255,210,122,0.35);
+  }
+  #hint p{
+    margin:0; font-size: 13px; color: var(--ink-dim);
+    letter-spacing:0.02em;
+  }
+  #hint.faded{opacity:0;}
+
+  #shareBtn{
+    position:fixed;
+    right: calc(env(safe-area-inset-right,0px) + 18px);
+    bottom: calc(env(safe-area-inset-bottom,0px) + 18px);
+    z-index:6;
+    width:52px; height:52px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #2c2450, #0c0a1f 70%);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    color: var(--ink);
+  }
+  #shareBtn svg{width:22px;height:22px;stroke:var(--ink);}
+  #shareBtn:active{transform:scale(0.94);}
+
+  #photoBtn{
+    position:fixed;
+    left: calc(env(safe-area-inset-left,0px) + 18px);
+    bottom: calc(env(safe-area-inset-bottom,0px) + 18px);
+    z-index:6;
+    width:52px; height:52px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #2c2450, #0c0a1f 70%);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    font-size:22px;
+  }
+  #photoBtn:active{transform:scale(0.94);}
+
+  #storageWarn{
+    position:fixed;
+    top: calc(env(safe-area-inset-top,0px) + 18px);
+    left:50%; transform:translateX(-50%);
+    background:#3a1e1e; border:1px solid rgba(255,120,120,0.3);
+    color:#ffd7d7; font-size:12.5px; padding:8px 14px; border-radius:10px;
+    z-index:8; opacity:0; pointer-events:none; transition:opacity .3s ease;
+    max-width:80vw; text-align:center;
+  }
+  #storageWarn.show{opacity:1;}
+
+  #toast{
+    position:fixed;
+    bottom: calc(env(safe-area-inset-bottom,0px) + 82px);
+    right: calc(env(safe-area-inset-right,0px) + 18px);
+    background: #1a1533;
+    border:1px solid rgba(255,255,255,0.12);
+    padding:9px 14px; border-radius:10px;
+    font-size:13px; color:var(--ink);
+    opacity:0; transform: translateY(6px);
+    transition: opacity .35s ease, transform .35s ease;
+    z-index:7; pointer-events:none;
+  }
+  #toast.show{opacity:1; transform:translateY(0);}
+
+  #celebration{
+    position:fixed; inset:0; z-index:20;
+    display:none;
+    align-items:center; justify-content:center;
+    background: rgba(4,3,12,0.72);
+    backdrop-filter: blur(3px);
+  }
+  #celebration.active{display:flex;}
+  #particleField{
+    position:absolute; inset:0; overflow:hidden;
+    pointer-events:none;
+  }
+  .petal{
+    position:absolute;
+    bottom:-40px;
+    font-size: 26px;
+    opacity:0.95;
+    animation-name: floatUp;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes floatUp{
+    0%{ transform: translate(0,0) rotate(0deg); opacity:0; }
+    10%{ opacity:1; }
+    100%{ transform: translate(var(--dx), -115vh) rotate(var(--rot)); opacity:0; }
+  }
+
+  #celebCard{
+    position:relative;
+    z-index:2;
+    text-align:center;
+    padding: 34px 30px;
+    max-width: 320px;
+  }
+  #celebCard .starname{
+    font-family:'Cormorant Garamond', serif;
+    font-weight:600;
+    font-size: clamp(24px, 6vw, 32px);
+    margin: 0 0 8px 0;
+  }
+  #celebCard p{
+    color: var(--ink-dim);
+    font-size:14px;
+    margin: 0 0 22px 0;
+  }
+  #closeCeleb{
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.28);
+    color: var(--ink);
+    padding: 9px 22px;
+    border-radius: 999px;
+    font-family:'Quicksand', sans-serif;
+    font-size: 13px;
+    letter-spacing:0.03em;
+    cursor:pointer;
+  }
+  #closeCeleb:active{transform:scale(0.96);}
+</style>
+</head>
+<body>
+
+<canvas id="galaxy"></canvas>
+
+<div id="hint">
+  <h1>Tu Galaxia</h1>
+  <p>Arrastra para explorar · Rueda o pellizco para zoom · Toca una estrella · 📷 para agregar recuerdos</p>
+</div>
+
+<button id="shareBtn" aria-label="Compartir">
+  <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="5" r="3"></circle>
+    <circle cx="6" cy="12" r="3"></circle>
+    <circle cx="18" cy="19" r="3"></circle>
+    <line x1="8.6" y1="10.6" x2="15.4" y2="6.4"></line>
+    <line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line>
+  </svg>
+</button>
+<div id="toast">Enlace copiado</div>
+<button id="photoBtn" aria-label="Agregar recuerdo" title="Agregar foto">📷</button>
+<input id="photoInput" type="file" accept="image/*" multiple capture="environment" style="display:none;">
+<div id="storageWarn"></div>
+
+<div id="celebration">
+  <div id="particleField"></div>
+  <div id="celebCard">
+    <div class="starname" id="starName">Estrella</div>
+    <p>hizo una pequeña melodía solo para ti</p>
+    <img id="celebPhoto" style="display:none; max-width:240px; width:80vw; border-radius:14px; margin:0 0 20px 0; box-shadow:0 10px 30px rgba(0,0,0,0.5);" />
+    <div id="noPhotoMsg" style="display:none; color:var(--ink-dim); font-size:13px; margin:-6px 0 20px 0;">Aún no tienes recuerdos guardados aquí.</div>
+    <button id="closeCeleb">Volver a la galaxia</button>
+    <div style="margin-top:10px;">
+      <button id="addPhotoInCeleb" style="background:transparent;border:none;color:var(--accent);font-family:'Quicksand',sans-serif;font-size:13px;text-decoration:underline;cursor:pointer;padding:6px;">+ Agregar un recuerdo aquí</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Canvas setup ----------
+  const canvas = document.getElementById('galaxy');
+  const ctx = canvas.getContext('2d');
+  let dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  let W, H;
+
+  function resize(){
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Camera ----------
+  let scale = 1, offX = 0, offY = 0;
+  const MIN_SCALE = 0.35, MAX_SCALE = 34;
+
+  function worldToScreen(x,y){
+    return [ x*scale + offX + W/2, y*scale + offY + H/2 ];
+  }
+  function screenToWorld(sx,sy){
+    return [ (sx - W/2 - offX)/scale, (sy - H/2 - offY)/scale ];
+  }
+
+  // ---------- Palette (varios colores) ----------
+  const ARM_HUES = [188, 205, 262, 285, 320]; // cian, azul, violeta, púrpura, magenta
+
+  // ---------- Generate galaxy ----------
+  const NUM_ARMS = 5;
+  const NUM_STARS = 2600;
+  const MAX_R = 900;
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  const stars = [];
+  for(let i=0;i<NUM_STARS;i++){
+    const arm = i % NUM_ARMS;
+    const t = Math.pow(Math.random(), 0.55);
+    const dist = t * MAX_R;
+    const armAngle = arm * (2*Math.PI/NUM_ARMS);
+    const spiral = dist * 0.012;
+    const scatter = (1-t) * 0.9 + 0.12;
+    const angle = armAngle + spiral + rand(-scatter, scatter);
+    const x = Math.cos(angle) * dist + rand(-14,14);
+    const y = Math.sin(angle) * dist * 0.62 + rand(-14,14);
+    const hue = ARM_HUES[arm] + rand(-14,14);
+    const core = dist < 70;
+    stars.push({
+      x, y,
+      hue: core ? rand(40,52) : hue,
+      sat: core ? 30 : rand(55,85),
+      light: core ? rand(78,92) : rand(58,80),
+      size: core ? rand(1.4,2.6) : rand(0.6, 2.2),
+      phase: Math.random()*Math.PI*2,
+      speed: rand(0.6,1.6),
+      special: Math.random() < 0.012
+    });
+  }
+  // extra bright "special" stars guaranteed spread out, clearly clickable
+  for(let i=0;i<70;i++){
+    const arm = i % NUM_ARMS;
+    const dist = rand(60, MAX_R*0.95);
+    const armAngle = arm * (2*Math.PI/NUM_ARMS);
+    const angle = armAngle + dist*0.012 + rand(-0.5,0.5);
+    stars.push({
+      x: Math.cos(angle)*dist, y: Math.sin(angle)*dist*0.62,
+      hue: ARM_HUES[arm] + rand(-10,10),
+      sat: rand(60,90), light: rand(75,95),
+      size: rand(2.6,3.6),
+      phase: Math.random()*Math.PI*2,
+      speed: rand(0.6,1.4),
+      special: true
+    });
+  }
+
+  // capa de polvo de estrellas: puntitos blancos dispersos por toda la escena
+  const dust = [];
+  const NUM_DUST = 1400;
+  for(let i=0;i<NUM_DUST;i++){
+    const angle = rand(0, Math.PI*2);
+    const dist = Math.pow(Math.random(), 0.4) * MAX_R * 1.25;
+    dust.push({
+      x: Math.cos(angle)*dist,
+      y: Math.sin(angle)*dist*0.7,
+      size: rand(0.4,1.5),
+      light: rand(75,100),
+      sat: rand(0,12),
+      phase: Math.random()*Math.PI*2,
+      speed: rand(0.4,1.1)
+    });
+  }
+
+  const nebulae = [];
+  for(let i=0;i<NUM_ARMS;i++){
+    const dist = rand(120, MAX_R*0.75);
+    const angle = i*(2*Math.PI/NUM_ARMS) + dist*0.012;
+    nebulae.push({
+      x: Math.cos(angle)*dist, y: Math.sin(angle)*dist*0.62,
+      r: rand(220,360), hue: ARM_HUES[i]
+    });
+  }
+
+  // planetas decorativos, como los que aparecen en la esquina de la imagen de referencia
+  const planets = [
+    { x: MAX_R*0.62, y: -MAX_R*0.68, r: 46, hue: 195, ring: true },
+    { x: MAX_R*0.74, y: -MAX_R*0.55, r: 20, hue: 210, ring: false }
+  ];
+
+  // ---------- Draw ----------
+  let t0 = performance.now();
+
+  function draw(now){
+    const dt = (now - t0)/1000; t0 = now;
+    ctx.clearRect(0,0,W,H);
+
+    // deep space backdrop
+    const g = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2, Math.max(W,H)*0.75);
+    g.addColorStop(0, '#100b26');
+    g.addColorStop(1, '#05040d');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    // nebula blobs (only when reasonably zoomed out/in-frame)
+    ctx.save();
+    ctx.filter = 'blur(50px)';
+    nebulae.forEach(n=>{
+      const [sx,sy] = worldToScreen(n.x,n.y);
+      const r = n.r*scale;
+      if(sx+r<0||sx-r>W||sy+r<0||sy-r>H) return;
+      const grad = ctx.createRadialGradient(sx,sy,0,sx,sy,r);
+      grad.addColorStop(0, `hsla(${n.hue},80%,55%,0.28)`);
+      grad.addColorStop(1, `hsla(${n.hue},80%,55%,0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+
+    // brillo cálido del núcleo galáctico (como el centro amarillo de la referencia)
+    {
+      const [cx,cy] = worldToScreen(0,0);
+      const r = 130*scale;
+      const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+      grad.addColorStop(0, 'hsla(46,90%,78%,0.55)');
+      grad.addColorStop(0.4, 'hsla(46,85%,65%,0.22)');
+      grad.addColorStop(1, 'hsla(46,85%,65%,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    }
+
+    // polvo de estrellas disperso
+    for(let i=0;i<dust.length;i++){
+      const d = dust[i];
+      const [sx,sy] = worldToScreen(d.x, d.y);
+      if(sx<-5||sx>W+5||sy<-5||sy>H+5) continue;
+      d.phase += dt*d.speed;
+      const tw = 0.5 + 0.5*Math.sin(d.phase);
+      ctx.beginPath();
+      ctx.fillStyle = `hsla(200,${d.sat}%,${d.light}%,${tw*0.85})`;
+      ctx.arc(sx,sy, Math.max(0.35, d.size*Math.min(scale,4)*0.5), 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // planetas decorativos
+    planets.forEach(p=>{
+      const [sx,sy] = worldToScreen(p.x,p.y);
+      const r = p.r*scale;
+      if(sx+r*2<0||sx-r*2>W||sy+r*2<0||sy-r*2>H) return;
+      if(p.ring){
+        ctx.save();
+        ctx.strokeStyle = `hsla(${p.hue},70%,75%,0.35)`;
+        ctx.lineWidth = Math.max(1, r*0.09);
+        ctx.beginPath();
+        ctx.ellipse(sx,sy, r*1.7, r*0.55, -0.35, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const grad = ctx.createRadialGradient(sx-r*0.3,sy-r*0.3,r*0.1, sx,sy,r);
+      grad.addColorStop(0, `hsla(${p.hue},70%,70%,0.9)`);
+      grad.addColorStop(1, `hsla(${p.hue},70%,30%,0.9)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
+    });
+
+    // stars
+    for(let i=0;i<stars.length;i++){
+      const s = stars[i];
+      const [sx,sy] = worldToScreen(s.x, s.y);
+      if(sx<-10||sx>W+10||sy<-10||sy>H+10) continue;
+      s.phase += dt*s.speed;
+      const twinkle = 0.65 + 0.35*Math.sin(s.phase);
+      const r = Math.max(0.4, s.size*Math.min(scale,6)*0.55);
+      ctx.beginPath();
+      ctx.fillStyle = `hsla(${s.hue},${s.sat}%,${s.light}%,${twinkle})`;
+      ctx.arc(sx,sy,r,0,Math.PI*2);
+      ctx.fill();
+      if(s.special){
+        ctx.beginPath();
+        ctx.fillStyle = `hsla(${s.hue},${s.sat}%,${s.light}%,${twinkle*0.18})`;
+        ctx.arc(sx,sy,r*4.2,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  // ---------- Interaction: pan + zoom (mouse) ----------
+  let dragging = false, lastX=0, lastY=0, moved=0;
+
+  function zoomAt(sx, sy, factor){
+    const before = screenToWorld(sx,sy);
+    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale*factor));
+    const after = screenToWorld(sx,sy);
+    offX += (after[0]-before[0])*scale;
+    offY += (after[1]-before[1])*scale;
+  }
+
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY*0.0015);
+    zoomAt(e.clientX, e.clientY, factor);
+    hideHint();
+  }, {passive:false});
+
+  canvas.addEventListener('mousedown', (e)=>{
+    dragging = true; moved = 0;
+    lastX = e.clientX; lastY = e.clientY;
+    canvas.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX-lastX, dy = e.clientY-lastY;
+    offX += dx; offY += dy;
+    moved += Math.abs(dx)+Math.abs(dy);
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  window.addEventListener('mouseup', (e)=>{
+    if(dragging && moved < 6){
+      tryClickStar(e.clientX, e.clientY);
+    }
+    dragging = false;
+    canvas.classList.remove('dragging');
+  });
+
+  // ---------- Interaction: touch (drag + pinch + tap) ----------
+  let touches = {};
+  let pinchStartDist = null, pinchStartScale = 1;
+
+  function dist(a,b){ return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
+  function mid(a,b){ return [(a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2]; }
+
+  canvas.addEventListener('touchstart', (e)=>{
+    hideHint();
+    for(const t of e.changedTouches) touches[t.identifier]=t;
+    const list = Object.values(touches);
+    if(list.length===1){
+      dragging = true; moved=0;
+      lastX = list[0].clientX; lastY = list[0].clientY;
+    } else if(list.length===2){
+      dragging = false;
+      pinchStartDist = dist(list[0], list[1]);
+      pinchStartScale = scale;
+    }
+  }, {passive:true});
+
+  canvas.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    for(const t of e.changedTouches) touches[t.identifier]=t;
+    const list = Object.values(touches);
+    if(list.length===1 && dragging){
+      const dx = list[0].clientX-lastX, dy = list[0].clientY-lastY;
+      offX += dx; offY += dy;
+      moved += Math.abs(dx)+Math.abs(dy);
+      lastX = list[0].clientX; lastY = list[0].clientY;
+    } else if(list.length===2 && pinchStartDist){
+      const d = dist(list[0], list[1]);
+      const [mx,my] = mid(list[0], list[1]);
+      const factor = (d/pinchStartDist) * (pinchStartScale/scale);
+      zoomAt(mx, my, factor);
+    }
+  }, {passive:false});
+
+  canvas.addEventListener('touchend', (e)=>{
+    const list = Object.values(touches);
+    if(list.length<=1 && dragging && moved < 8){
+      const t = e.changedTouches[0];
+      tryClickStar(t.clientX, t.clientY);
+    }
+    for(const t of e.changedTouches) delete touches[t.identifier];
+    if(Object.keys(touches).length < 2) pinchStartDist = null;
+    if(Object.keys(touches).length === 0) dragging = false;
+  }, {passive:true});
+
+  // ---------- Hint fade ----------
+  let hintHidden = false;
+  function hideHint(){
+    if(hintHidden) return;
+    hintHidden = true;
+    document.getElementById('hint').classList.add('faded');
+  }
+  setTimeout(hideHint, 4500);
+
+  // ---------- Click a star ----------
+  function tryClickStar(sx, sy){
+    const [wx,wy] = screenToWorld(sx,sy);
+    const tolerance = Math.max(3.5, 9/scale);
+    let best = null, bestD = tolerance;
+    for(const s of stars){
+      const d = Math.hypot(s.x-wx, s.y-wy);
+      if(d < bestD){ bestD = d; best = s; }
+    }
+    if(best){
+      hideHint();
+      celebrate(best);
+    }
+  }
+
+  // ---------- Recuerdos (fotos guardadas en este dispositivo) ----------
+  const PHOTO_KEY = 'galaxia_recuerdos_v1';
+  function loadPhotos(){
+    try{
+      const raw = localStorage.getItem(PHOTO_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function savePhotos(list){
+    try{
+      localStorage.setItem(PHOTO_KEY, JSON.stringify(list));
+      return true;
+    }catch(e){ return false; }
+  }
+  let photos = loadPhotos();
+  let lastShownPhoto = -1;
+
+  const storageWarn = document.getElementById('storageWarn');
+  function warn(msg){
+    storageWarn.textContent = msg;
+    storageWarn.classList.add('show');
+    setTimeout(()=>storageWarn.classList.remove('show'), 3200);
+  }
+
+  function compressImage(file){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = ()=>{ img.src = reader.result; };
+      reader.onerror = reject;
+      img.onload = ()=>{
+        const maxDim = 900;
+        let w = img.width, h = img.height;
+        if(w>h && w>maxDim){ h = h*(maxDim/w); w = maxDim; }
+        else if(h>maxDim){ w = w*(maxDim/h); h = maxDim; }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const photoInput = document.getElementById('photoInput');
+  document.getElementById('photoBtn').addEventListener('click', ()=> photoInput.click());
+  document.getElementById('addPhotoInCeleb').addEventListener('click', ()=> photoInput.click());
+
+  photoInput.addEventListener('change', async (e)=>{
+    const files = Array.from(e.target.files || []);
+    for(const f of files){
+      try{
+        const dataUrl = await compressImage(f);
+        photos.push(dataUrl);
+        const ok = savePhotos(photos);
+        if(!ok){
+          photos.pop();
+          warn('No hay más espacio en este dispositivo para guardar fotos.');
+          break;
+        }
+      }catch(err){ /* archivo inválido, se ignora */ }
+    }
+    photoInput.value = '';
+    if(files.length){
+      showRandomPhotoInCard();
+    }
+  });
+
+  function showRandomPhotoInCard(){
+    const img = document.getElementById('celebPhoto');
+    const noMsg = document.getElementById('noPhotoMsg');
+    if(photos.length === 0){
+      img.style.display = 'none';
+      noMsg.style.display = 'block';
+      return;
+    }
+    let idx = Math.floor(Math.random()*photos.length);
+    if(photos.length>1 && idx===lastShownPhoto) idx = (idx+1)%photos.length;
+    lastShownPhoto = idx;
+    img.src = photos[idx];
+    img.style.display = 'block';
+    noMsg.style.display = 'none';
+  }
+
+  // ---------- Celebration: petals/hearts + sound ----------
+  const EMOJI_SETS = [
+    ['🌸','🌷','🌼'],
+    ['❤️','💗','💛'],
+    ['🌺','✨','💫'],
+    ['🌻','💕','🌟']
+  ];
+  const NAME_PARTS_A = ['Aurora','Estela','Lumen','Nova','Céfira','Vesper','Iris','Selene'];
+  const NAME_PARTS_B = ['del Alba','Celeste','Radiante','de Cristal','Errante','Serena','Dorada'];
+
+  const overlay = document.getElementById('celebration');
+  const field = document.getElementById('particleField');
+  const starNameEl = document.getElementById('starName');
+  let celebTimer = null;
+
+  function celebrate(star){
+    overlay.classList.add('active');
+    starNameEl.textContent = NAME_PARTS_A[Math.floor(Math.random()*NAME_PARTS_A.length)] + ' ' + NAME_PARTS_B[Math.floor(Math.random()*NAME_PARTS_B.length)];
+    field.innerHTML = '';
+    showRandomPhotoInCard();
+
+    const setIndex = Math.floor(((star.hue%360)+360)%360 / (360/EMOJI_SETS.length));
+    const emojis = EMOJI_SETS[setIndex % EMOJI_SETS.length];
+
+    let spawned = 0;
+    const maxSpawn = 42;
+    if(celebTimer) clearInterval(celebTimer);
+    celebTimer = setInterval(()=>{
+      if(spawned++ > maxSpawn){ clearInterval(celebTimer); return; }
+      spawnPetal(emojis);
+    }, 90);
+
+    playMelody(star.hue);
+  }
+
+  function spawnPetal(emojis){
+    const el = document.createElement('span');
+    el.className = 'petal';
+    el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    const startX = Math.random()*100;
+    const dx = (Math.random()*140-70) + 'px';
+    const rot = (Math.random()*160-80) + 'deg';
+    const dur = 3.2 + Math.random()*2.2;
+    el.style.left = startX+'vw';
+    el.style.fontSize = (18+Math.random()*22)+'px';
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--rot', rot);
+    el.style.animationDuration = dur+'s';
+    field.appendChild(el);
+    setTimeout(()=>el.remove(), dur*1000+200);
+  }
+
+  document.getElementById('closeCeleb').addEventListener('click', ()=>{
+    overlay.classList.remove('active');
+    if(celebTimer) clearInterval(celebTimer);
+    field.innerHTML = '';
+  });
+
+  // ---------- Tiny generated melody (Web Audio API) ----------
+  let audioCtx = null;
+  function getAudioCtx(){
+    if(!audioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  const SCALES = [
+    [523.25, 659.25, 783.99, 987.77, 1046.50],   // C mayor pentatónico
+    [493.88, 587.33, 659.25, 880.00, 987.77],    // B pentatónico
+    [440.00, 554.37, 659.25, 880.00, 1108.73],   // A con tercera
+    [466.16, 587.33, 698.46, 932.33, 1174.66]    // Bb
+  ];
+
+  function playMelody(hue){
+    const ctxA = getAudioCtx();
+    const scaleSet = SCALES[Math.floor(((hue%360)+360)%360 / 90) % SCALES.length];
+    const pattern = [0,2,1,3,4,3,2].map(i => scaleSet[i % scaleSet.length]);
+    let when = ctxA.currentTime + 0.05;
+
+    pattern.forEach((freq, idx)=>{
+      const osc = ctxA.createOscillator();
+      const gain = ctxA.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const noteDur = 0.22;
+      gain.gain.setValueAtTime(0, when);
+      gain.gain.linearRampToValueAtTime(0.18, when+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, when+noteDur);
+      osc.connect(gain).connect(ctxA.destination);
+      osc.start(when);
+      osc.stop(when+noteDur+0.02);
+      when += noteDur*0.85;
+    });
+  }
+
+  // ---------- Share ----------
+  const shareBtn = document.getElementById('shareBtn');
+  const toast = document.getElementById('toast');
+
+  shareBtn.addEventListener('click', async ()=>{
+    const url = window.location.href;
+    if(navigator.share){
+      try{
+        await navigator.share({ title: 'Mi Galaxia Mágica', text: '✨ Explora esta galaxia y descubre sus estrellas ✨', url });
+      }catch(e){ /* usuario canceló */ }
+    } else {
+      try{
+        await navigator.clipboard.writeText(url);
+        toast.classList.add('show');
+        setTimeout(()=>toast.classList.remove('show'), 1800);
+      }catch(e){
+        toast.textContent = url;
+        toast.classList.add('show');
+        setTimeout(()=>toast.classList.remove('show'), 3000);
+      }
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
